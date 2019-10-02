@@ -18,19 +18,27 @@ const db = admin.initializeApp().firestore();
 
 // Recalculates the total cost of a cart; triggered when there's a change
 // to any items in a cart.
-exports.calculateCart = functions
-    .firestore.document("carts/{cartId}/items/{itemId}")
-    .onWrite(async (change, context) => {
-      let totalPrice = 125.98;
-      let itemCount = 8;
-      try {
+exports.calculateCart = functions.firestore
+  .document('carts/{cartId}/items/{itemId}')
+  .onWrite(async (change, context) => {
+    try {
+      const cartRef = db.collection('carts').doc(context.params.cartId);
+      const items = await cartRef.collection('items').get();
+      const cart = await cartRef.get();
 
-        const cartRef = db.collection("carts").doc(context.params.cartId);
+      const counts = items.docs.reduce(
+        (counts, item) => {
+          const itemData = item.data();
+          if (!itemData.price) return counts;
 
-        return cartRef.update({
-          totalPrice,
-          itemCount
-        });
-      } catch(err) {
-      }
-    });
+          const quantity = itemData.quantity ? itemData.quantity : 1;
+          return {
+            itemCount: counts.itemCount + quantity,
+            totalPrice: counts.totalPrice + itemData.price * quantity
+          };
+        },
+        { itemCount: 0, totalPrice: 0 }
+      );
+      return cartRef.update(counts);
+    } catch (err) {}
+  });

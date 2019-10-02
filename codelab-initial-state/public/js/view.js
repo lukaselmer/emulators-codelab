@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 /**
  * RE:DOM is a simple library for constructing HTML elements.
  * https://redom.js.org/
@@ -24,7 +23,7 @@ export class FlatButton {
 
   constructor(text, callback) {
     this.el = el(
-      "button.mdl-button mdl-js-button mdl-js-ripple-effect mdl-button--primary",
+      'button.mdl-button mdl-js-button mdl-js-ripple-effect mdl-button--primary',
       {
         onclick: callback
       },
@@ -40,51 +39,62 @@ export class FlatButton {
 export class ItemCard {
   id;
   data;
-  callback;
+  addToCartCb;
+  removeFromCartCb;
   el;
   addButtonEl;
+  removeButtonEl;
 
-  constructor(doc, callback) {
+  constructor(doc, callbacks) {
     this.id = doc.id;
     this.data = doc.data();
-    this.callback = callback;
+    this.addToCartCb = callbacks.add;
+    this.removeFromCartCb = callbacks.remove;
 
     const { name, price, description, imageUrl } = doc.data();
 
     this.addButtonEl = new FlatButton(`ADD TO CART (\$${price})`, () => {
-      this.callback(this.id, this.data);
+      this.addToCartCb(this.id, this.data);
     });
 
-    const textEl = el("div.item-text", [
-      el("p.title mdl-card__title-text", name),
-      el("p.text mdl-card__supporting-text", description)
+    this.removeButtonEl = new FlatButton(`REMOVE FROM CART`, () => {
+      this.removeFromCartCb(this.id, this.data);
+    });
+
+    const textEl = el('div.item-text', [
+      el('p.title mdl-card__title-text', name),
+      el('p.text mdl-card__supporting-text', description)
     ]);
-    const imageEl = el("div.item-image", [el("img.img", { src: imageUrl })]);
-    const footerEl = el("div.item-footer", [this.addButtonEl]);
+    const imageEl = el('div.item-image', [el('img.img', { src: imageUrl })]);
+    const footerEl = el('div.item-footer', [this.addButtonEl, this.removeButtonEl]);
 
-    const contentEl = el("div.content", [textEl, imageEl, footerEl]);
+    const contentEl = el('div.content', [textEl, imageEl, footerEl]);
 
-    this.el = el("div.card mdl-card mdl-shadow--2dp", contentEl);
+    this.el = el('div.card mdl-card mdl-shadow--2dp', contentEl);
   }
 
   setAddEnabled(enabled) {
     this.addButtonEl.setEnabled(enabled);
   }
+
+  setRemoveEnabled(enabled) {
+    this.removeButtonEl.setEnabled(enabled);
+  }
 }
 
 export class ItemCardList {
   el;
-  callback;
+  callbacks;
   itemCards = [];
 
-  constructor(callback) {
-    this.el = el("div#items");
-    this.callback = callback;
+  constructor(callbacks) {
+    this.el = el('div#items');
+    this.callbacks = callbacks;
   }
 
   setItems(items) {
     this.itemCards = items.docs.map(item => {
-      return new ItemCard(item, this.callback);
+      return new ItemCard(item, this.callbacks);
     });
 
     setChildren(this.el, this.itemCards);
@@ -107,15 +117,15 @@ export class HeaderIcon {
 
   constructor(id, icon, text, callback) {
     this.id = id;
-    this.textEl = el("p", text);
-    this.iconEl = el("i.material-icons", icon);
+    this.textEl = el('p', text);
+    this.iconEl = el('i.material-icons', icon);
 
     this.el = el(
-      "div.labeled-icon mdl-js-ripple-effect ripple-container",
+      'div.labeled-icon mdl-js-ripple-effect ripple-container clickable',
       {
         onclick: callback
       },
-      [this.iconEl, this.textEl, el("span.mdl-ripple")]
+      [this.iconEl, this.textEl, el('span.mdl-ripple')]
     );
   }
 
@@ -136,19 +146,19 @@ export class HeaderBar {
   constructor(icons) {
     icons = icons || [];
 
-    const logoEl = el("div.logo", [el("img", { src: "img/sparky.png" })]);
+    const logoEl = el('div.logo', [el('img', { src: 'img/sparky.png' })]);
 
-    const textEl = el("div.text", [
-      el("p.title", "The Fire Store"),
-      el("p.subtitle", "Your one-stop shop for fire sales!")
+    const textEl = el('div.text', [
+      el('p.title', 'The Fire Store'),
+      el('p.subtitle', 'Your one-stop shop for fire sales!')
     ]);
 
     for (const icon of icons) {
       this.icons[icon.id] = icon;
     }
 
-    const iconsEl = el("div.icons ", icons);
-    this.el = el("div#header", [logoEl, textEl, iconsEl]);
+    const iconsEl = el('div.icons ', icons);
+    this.el = el('div#header', [logoEl, textEl, iconsEl]);
   }
 
   setIconEnabled(id, enabled) {
@@ -163,26 +173,22 @@ export class HeaderBar {
 export class CartList {
   constructor(items) {
     const children = items.map(i => {
-      return el("li", i);
+      return el('li', i);
     });
 
-    this.el = el("ul", children);
+    this.el = el('ul', children);
   }
 }
 
 export class ModalDialog {
   constructor(title) {
-    this.titleEl = el("h4.mdl-dialog__title", title);
-    this.contentEl = el("div.mdl-dialog__content");
-    this.actionsEl = el("div.mdl-dialog__actions", [
-      el("button.mdl-button", { type: "button", onclick: this.hide }, "Close")
+    this.titleEl = el('h4.mdl-dialog__title', title);
+    this.contentEl = el('div.mdl-dialog__content');
+    this.actionsEl = el('div.mdl-dialog__actions', [
+      el('button.mdl-button', { type: 'button', onclick: this.hide }, 'Close')
     ]);
 
-    this.el = el("dialog#modal.mdl-dialog", [
-      this.titleEl,
-      this.contentEl,
-      this.actionsEl
-    ]);
+    this.el = el('dialog#modal.mdl-dialog', [this.titleEl, this.contentEl, this.actionsEl]);
   }
 
   setContent(element) {
@@ -190,10 +196,10 @@ export class ModalDialog {
   }
 
   show() {
-    document.querySelector("#modal").showModal();
+    document.querySelector('#modal').showModal();
   }
 
   hide() {
-    document.querySelector("#modal").close();
+    document.querySelector('#modal').close();
   }
 }

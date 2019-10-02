@@ -14,20 +14,16 @@
 
 const { el, mount } = redom;
 
-import { createItems } from "./data.js";
-import {
-  ItemCardList,
-  HeaderIcon,
-  HeaderBar,
-  ModalDialog,
-  CartList
-} from "./view.js";
+import { createItems } from './data.js';
+import { ItemCardList, HeaderIcon, HeaderBar, ModalDialog, CartList } from './view.js';
 
 export async function onDocumentReady(firebaseApp) {
-  console.log("Firebase Config", JSON.stringify(firebaseApp.options));
+  console.log('Firebase Config', JSON.stringify(firebaseApp.options));
 
   const db = firebaseApp.firestore();
-  
+
+  if (window.location.hostname === 'localhost') db.settings({ host: 'localhost:8081', ssl: false });
+
   const auth = firebaseApp.auth();
   const homePage = new HomePage(db, auth);
   mount(document.body, homePage);
@@ -49,30 +45,36 @@ class HomePage {
     this.auth = auth;
 
     this.headerBar = new HeaderBar([
-      new HeaderIcon("sign_in", "account_circle", "Sign In", () => {
+      new HeaderIcon('sign_in', 'account_circle', 'Sign In', () => {
         this.onSignInClicked();
       }),
-      new HeaderIcon("cart", "shopping_cart", "N/A", () => {
+      new HeaderIcon('cart', 'shopping_cart', 'N/A', () => {
         this.showCart();
       })
     ]);
 
-    this.itemCardList = new ItemCardList(async (id, data) => {
-      try {
-        await this.addToCart(id, data);
-      } catch (e) {
-        console.warn(e);
-        this.showError("Error adding item to cart");
+    this.itemCardList = new ItemCardList({
+      add: async (id, data) => {
+        try {
+          await this.addToCart(id, data);
+        } catch (e) {
+          console.warn(e);
+          this.showError('Error adding item to cart');
+        }
+      },
+      remove: async (id, data) => {
+        try {
+          await this.removeFromCart(id, data);
+        } catch (e) {
+          console.warn(e);
+          this.showError('Error adding item to cart');
+        }
       }
     });
 
-    this.modalDialog = new ModalDialog("Cart", "Nothing here.");
+    this.modalDialog = new ModalDialog('Cart', 'Nothing here.');
 
-    this.el = el("div.header-page", [
-      this.headerBar,
-      this.itemCardList,
-      this.modalDialog
-    ]);
+    this.el = el('div.header-page', [this.headerBar, this.itemCardList, this.modalDialog]);
 
     this.listenForAuth();
     this.listenForItems();
@@ -87,7 +89,7 @@ class HomePage {
   }
 
   listenForItems() {
-    this.db.collection("items").onSnapshot(items => {
+    this.db.collection('items').onSnapshot(items => {
       // Note: for the purposes of this demo we create random items in the database if none exist.
       // In a real app it would not make sense for the client to do this.
       if (items.size === 0) {
@@ -110,7 +112,7 @@ class HomePage {
     }
 
     // If needed, create the base cart object
-    const cartRef = this.db.collection("carts").doc(uid);
+    const cartRef = this.db.collection('carts').doc(uid);
     await cartRef.set(
       {
         ownerUID: uid
@@ -121,15 +123,15 @@ class HomePage {
     // Listen for updates to the cart
     // TODO: Unsub from this as well
     this.cartUnsub = cartRef.onSnapshot(cart => {
-      console.log("cart", cart.data());
+      console.log('cart', cart.data());
 
       const total = cart.data().totalPrice || 0;
       const count = cart.data().itemCount || 0;
-      this.headerBar.setIconText("cart", `\$${total.toFixed(2)} (${count})`);
+      this.headerBar.setIconText('cart', `\$${total.toFixed(2)} (${count})`);
     });
 
     // Listen for updates to cart items
-    this.cartItemsUnsub = cartRef.collection("items").onSnapshot(items => {
+    this.cartItemsUnsub = cartRef.collection('items').onSnapshot(items => {
       this.setCartItems(items);
     });
   }
@@ -144,13 +146,13 @@ class HomePage {
 
   setSignedIn(signedIn) {
     if (signedIn) {
-      this.headerBar.setIconText("sign_in", "Sign Out");
-      this.headerBar.setIconEnabled("cart", true);
+      this.headerBar.setIconText('sign_in', 'Sign Out');
+      this.headerBar.setIconEnabled('cart', true);
       this.listenForCart(this.auth.currentUser.uid);
     } else {
-      this.headerBar.setIconText("sign_in", "Sign In");
-      this.headerBar.setIconText("cart", "N/A");
-      this.headerBar.setIconEnabled("cart", false);
+      this.headerBar.setIconText('sign_in', 'Sign In');
+      this.headerBar.setIconText('cart', 'N/A');
+      this.headerBar.setIconEnabled('cart', false);
       this.setCartItems(null);
     }
   }
@@ -167,20 +169,52 @@ class HomePage {
     }
 
     // For any item in the cart, we disable the add button
+    // this.itemCardList.getAll().forEach(itemCard => {
+    //   const inCart = itemIds.indexOf(itemCard.id) >= 0;
+    //   itemCard.setAddEnabled(true); //!inCart);
+    // });
+
+    // For any item in the cart, we enable the remove button
     this.itemCardList.getAll().forEach(itemCard => {
       const inCart = itemIds.indexOf(itemCard.id) >= 0;
-      itemCard.setAddEnabled(!inCart);
+      itemCard.setRemoveEnabled(inCart);
     });
   }
 
-  addToCart(id, itemData) {
-    console.log("addToCart", id, JSON.stringify(itemData));
-    return this.db
-      .collection("carts")
+  async addToCart(id, itemData) {
+    console.log('addToCart', id, JSON.stringify(itemData));
+    if (this.auth.currentUser === null) return this.showError('You must be signed in!');
+
+    const oldQuantity = await this.getItemQuantity(id);
+    this.setQuantity(id, itemData, oldQuantity + 1);
+  }
+
+  async getItemQuantity(id) {
+    const element = await this.db
+      .collection('carts')
       .doc(this.auth.currentUser.uid)
-      .collection("items")
+      .collection('items')
       .doc(id)
-      .set(itemData);
+      .get();
+    return element && element.exists ? element.data().quantity || 1 : 0;
+  }
+
+  async removeFromCart(id, itemData) {
+    console.log('removeFromCart', id, JSON.stringify(itemData));
+    if (this.auth.currentUser === null) return this.showError('You must be signed in!');
+
+    const oldQuantity = await this.getItemQuantity(id);
+    this.setQuantity(id, itemData, oldQuantity - 1);
+  }
+
+  setQuantity(id, itemData, quantity) {
+    const doc = this.db
+      .collection('carts')
+      .doc(this.auth.currentUser.uid)
+      .collection('items')
+      .doc(id);
+
+    return quantity <= 0 ? doc.delete() : doc.set({ ...itemData, quantity });
   }
 
   showCart() {
@@ -188,7 +222,7 @@ class HomePage {
       return;
     }
 
-    const items = this.cartItems.map(doc => `${doc.name} - ${doc.price}`);
+    const items = this.cartItems.map(doc => `${doc.quantity || 1} x ${doc.name} - ${doc.price}`);
     this.modalDialog.setContent(new CartList(items));
     this.modalDialog.show();
   }
